@@ -17,6 +17,7 @@ package image
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -28,6 +29,8 @@ import (
 
 // fileFetcher is used to fetch files from a local filesystem
 type fileFetcher struct {
+	verificationHash string
+
 	InsecureFlags *rktflag.SecFlags
 	S             *store.Store
 	Ks            *keystore.Keystore
@@ -50,7 +53,12 @@ func (f *fileFetcher) GetHash(aciPath string, a *asc) (string, error) {
 	}
 	defer aciFile.Close()
 
-	key, err := f.S.WriteACI(aciFile, false)
+	key, err := f.S.WriteACI(aciFile, store.ACIFetchInfo{
+		Latest:           false,
+		VerificationHash: f.verificationHash,
+		SourceURL:        "file://" + absPath,
+		InsecureOptions:  f.InsecureFlags.String(),
+	})
 	if err != nil {
 		return "", err
 	}
@@ -100,6 +108,22 @@ func (f *fileFetcher) getVerifiedFile(aciPath string, a *asc) (*os.File, error) 
 	if err != nil {
 		return nil, errwrap.Wrap(fmt.Errorf("image %q verification failed", validator.GetImageName()), err)
 	}
+
+	if _, err := ascFile.Seek(0, 0); err != nil {
+		return nil, errwrap.Wrap(errors.New("error seeking the signature file"), err)
+	}
+
+	buf, err := ioutil.ReadAll(ascFile)
+	if err != nil {
+		return nil, errwrap.Wrap(errors.New("error reading the signature file"), err)
+	}
+
+	f.verificationHash = string(buf)
+
+	if _, err := ascFile.Seek(0, 0); err != nil {
+		return nil, errwrap.Wrap(errors.New("error seeking the signature file"), err)
+	}
+
 	printIdentities(entity)
 
 	retAciFile := aciFile

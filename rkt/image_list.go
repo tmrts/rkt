@@ -32,12 +32,15 @@ import (
 const (
 	defaultTimeLayout = "2006-01-02 15:04:05.999 -0700 MST"
 
-	id         = "id"
-	name       = "name"
-	importTime = "import time"
-	lastUsed   = "last used"
-	size       = "size"
-	latest     = "latest"
+	id               = "id"
+	name             = "name"
+	importTime       = "import time"
+	lastUsed         = "last used"
+	size             = "size"
+	latest           = "latest"
+	verificationHash = "verification hash"
+	sourceURL        = "source URL"
+	insecureOptions  = "Insecure Options"
 )
 
 // Convenience methods for formatting fields
@@ -48,16 +51,24 @@ func u(s string) string {
 	return strings.ToUpper(s)
 }
 
+func caseConversionMap(s []string) map[string]string {
+	m := make(map[string]string)
+
+	for _, token := range s {
+		normalizedToken := strings.Replace(token, " ", "", -1)
+
+		m[strings.ToLower(normalizedToken)] = strings.ToUpper(token)
+	}
+
+	return m
+}
+
 var (
 	// map of valid fields and related header name
-	ImagesFieldHeaderMap = map[string]string{
-		l(id):         u(id),
-		l(name):       u(name),
-		l(importTime): u(importTime),
-		l(lastUsed):   u(lastUsed),
-		l(latest):     u(latest),
-		l(size):       u(size),
-	}
+	ImagesFieldHeaderMap = caseConversionMap([]string{
+		id, name, importTime, lastUsed, size,
+		latest, verificationHash, sourceURL, insecureOptions,
+	})
 
 	// map of valid sort fields containing the mapping between the provided field name
 	// and the related aciinfo's field name.
@@ -66,8 +77,8 @@ var (
 		l(name):       l(name),
 		l(importTime): l(importTime),
 		l(lastUsed):   l(lastUsed),
-		l(latest):     l(latest),
 		l(size):       l(size),
+		l(latest):     l(latest),
 	}
 
 	ImagesSortableFields = map[string]struct{}{
@@ -185,6 +196,8 @@ func runImages(cmd *cobra.Command, args []string) int {
 		var fieldValues []string
 		for _, f := range flagImagesFields.Options {
 			fieldValue := ""
+			// TODO(tmrts): Create new types for each field (type aliases) and implement Stringer interface
+			// for the types to eliminate this switch branch.
 			switch f {
 			case l(id):
 				hashKey := aciInfo.BlobKey
@@ -224,10 +237,17 @@ func runImages(cmd *cobra.Command, args []string) int {
 				}
 			case l(latest):
 				fieldValue = fmt.Sprintf("%t", aciInfo.Latest)
+			case l(verificationHash):
+				fieldValue = fmt.Sprintf("%t", aciInfo.VerificationHash)
+			case l(sourceURL):
+				fieldValue = fmt.Sprintf("%t", aciInfo.SourceURL)
+			case l(insecureOptions):
+				fieldValue = fmt.Sprintf("%t", aciInfo.InsecureOptions)
 			}
-			fieldValues = append(fieldValues, fieldValue)
 
+			fieldValues = append(fieldValues, fieldValue)
 		}
+
 		fmt.Fprintf(tabOut, "%s\n", strings.Join(fieldValues, "\t"))
 	}
 

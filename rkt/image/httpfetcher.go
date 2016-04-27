@@ -17,6 +17,7 @@ package image
 import (
 	"errors"
 	"io"
+	"io/ioutil"
 	"net/url"
 	"time"
 
@@ -29,6 +30,8 @@ import (
 
 // httpFetcher is used to download images from http or https URLs.
 type httpFetcher struct {
+	verificationHash string
+
 	InsecureFlags *rktflag.SecFlags
 	S             *store.Store
 	Ks            *keystore.Keystore
@@ -59,7 +62,13 @@ func (f *httpFetcher) GetHash(u *url.URL, a *asc) (string, error) {
 		// CacheMaxAge is exceeded
 		return key, nil
 	}
-	key, err := f.S.WriteACI(aciFile, false)
+
+	key, err := f.S.WriteACI(aciFile, store.ACIFetchInfo{
+		Latest:           false,
+		VerificationHash: f.verificationHash,
+		SourceURL:        u.String(),
+		InsecureOptions:  f.InsecureFlags.String(),
+	})
 	if err != nil {
 		return "", err
 	}
@@ -168,6 +177,17 @@ func (f *httpFetcher) validate(aciFile, ascFile io.ReadSeeker) error {
 	}
 	if _, err := aciFile.Seek(0, 0); err != nil {
 		return errwrap.Wrap(errors.New("error seeking ACI file"), err)
+	}
+
+	buf, err := ioutil.ReadAll(ascFile)
+	if err != nil {
+		return errwrap.Wrap(errors.New("error reading the signature file"), err)
+	}
+
+	f.verificationHash = string(buf)
+
+	if _, err := ascFile.Seek(0, 0); err != nil {
+		return errwrap.Wrap(errors.New("error seeking the signature file"), err)
 	}
 
 	printIdentities(entity)

@@ -54,8 +54,8 @@ func (f *dockerFetcher) GetHash(u *url.URL) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf(`invalid docker URL %q; expected syntax is "docker://[REGISTRY_HOST[:REGISTRY_PORT]/]IMAGE_NAME[:TAG]"`, u)
 	}
-	latest := dockerURL.Tag == "latest"
-	return f.fetchImageFrom(u, latest)
+
+	return f.fetchImageFrom(u, dockerURL.Tag == "latest")
 }
 
 func (f *dockerFetcher) fetchImageFrom(u *url.URL, latest bool) (string, error) {
@@ -75,7 +75,12 @@ func (f *dockerFetcher) fetchImageFrom(u *url.URL, latest bool) (string, error) 
 	// alive, because we have an fd to it opened.
 	defer aciFile.Close()
 
-	key, err := f.S.WriteACI(aciFile, latest)
+	key, err := f.S.WriteACI(aciFile, store.ACIFetchInfo{
+		Latest:           latest,
+		VerificationHash: "",
+		SourceURL:        u.String(),
+		InsecureOptions:  f.InsecureFlags.String(),
+	})
 	if err != nil {
 		return "", err
 	}

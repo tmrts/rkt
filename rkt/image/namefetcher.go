@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/url"
 	"time"
 
@@ -35,6 +36,8 @@ import (
 
 // nameFetcher is used to download images via discovery
 type nameFetcher struct {
+	verificationHash string
+
 	InsecureFlags      *rktflag.SecFlags
 	S                  *store.Store
 	Ks                 *keystore.Keystore
@@ -108,7 +111,12 @@ func (f *nameFetcher) fetchImageFromSingleEndpoint(app *discovery.App, aciURL st
 	}
 	defer aciFile.Close()
 
-	key, err := f.S.WriteACI(aciFile, latest)
+	key, err := f.S.WriteACI(aciFile, store.ACIFetchInfo{
+		Latest:           latest,
+		VerificationHash: f.verificationHash,
+		SourceURL:        aciURL,
+		InsecureOptions:  f.InsecureFlags.String(),
+	})
 	if err != nil {
 		return "", err
 	}
@@ -234,8 +242,9 @@ func (f *nameFetcher) maybeFetchPubKeys(appName string) {
 
 func (f *nameFetcher) checkIdentity(appName string, ascFile io.ReadSeeker) error {
 	if _, err := ascFile.Seek(0, 0); err != nil {
-		return errwrap.Wrap(errors.New("error seeking signature file"), err)
+		return errwrap.Wrap(errors.New("error seeking the signature file"), err)
 	}
+
 	empty := bytes.NewReader([]byte{})
 	if _, err := f.Ks.CheckSignature(appName, empty, ascFile); err != nil {
 		if err == pgperrors.ErrUnknownIssuer {
@@ -266,6 +275,21 @@ func (f *nameFetcher) validate(app *discovery.App, aciFile, ascFile io.ReadSeeke
 	entity, err := v.ValidateWithSignature(f.Ks, ascFile)
 	if err != nil {
 		return err
+	}
+
+	if _, err := ascFile.Seek(0, 0); err != nil {
+		return errwrap.Wrap(errors.New("error seeking the signature file"), err)
+	}
+
+	buf, err := ioutil.ReadAll(ascFile)
+	if err != nil {
+		return errwrap.Wrap(errors.New("error reading the signature file"), err)
+	}
+
+	f.verificationHash = string(buf)
+
+	if _, err := ascFile.Seek(0, 0); err != nil {
+		return errwrap.Wrap(errors.New("error seeking the signature file"), err)
 	}
 
 	if _, err := aciFile.Seek(0, 0); err != nil {

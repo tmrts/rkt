@@ -21,46 +21,67 @@ import (
 	"time"
 )
 
+// ACIFetchInfo is used to store information about the fetching process of an ACI.
+type ACIFetchInfo struct {
+	// Latest defines if the ACI was imported using the latest pattern
+	// (no version label was provided on ACI discovery).
+	Latest bool
+
+	// VerificationHash is the GPG fingerprint that was used to verify the validity of the ACI.
+	VerificationHash string
+
+	// SourceURL is the URL used to import an ACI.
+	SourceURL string
+
+	// InsecureOptions are the insecure options that was used when retrieving the ACI.
+	InsecureOptions string
+}
+
 // ACIInfo is used to store information about an ACI.
 type ACIInfo struct {
 	// BlobKey is the key in the blob/imageManifest store of the related
 	// ACI file and is the db primary key.
 	BlobKey string
+
 	// Name is the name of the ACI.
 	Name string
+
 	// ImportTime is the time this ACI was imported in the store.
 	ImportTime time.Time
-	// LastUsed is the last time this image was read
+
+	// LastUsed is the last time this image was read.
 	LastUsed time.Time
-	// Size is the size in bytes of this image in the store
+
+	// Latest defines if the ACI was imported using the latest pattern
+	// (no version label was provided on ACI discovery).
+	Latest bool
+
+	// Size is the size in bytes of this image in the store.
 	Size int64
+
 	// TreeStoreSize is the size in bytes of this image in the tree store
 	TreeStoreSize int64
-	// Latest defines if the ACI was imported using the latest pattern (no
-	// version label was provided on ACI discovery)
-	Latest bool
-}
 
-func NewACIInfo(blobKey string, latest bool, t time.Time, size int64, treeStoreSize int64) *ACIInfo {
-	return &ACIInfo{
-		BlobKey:       blobKey,
-		Latest:        latest,
-		ImportTime:    t,
-		LastUsed:      time.Now(),
-		Size:          size,
-		TreeStoreSize: treeStoreSize,
-	}
+	// VerificationHash is the GPG fingerprint that was used to verify the validity of the ACI.
+	VerificationHash string
+
+	// SourceURL is the URL used to import an ACI.
+	SourceURL string
+
+	// InsecureOptions are the insecure options that was used when retrieving the ACI.
+	InsecureOptions string
 }
 
 func aciinfoRowScan(rows *sql.Rows, aciinfo *ACIInfo) error {
 	// This ordering MUST match that in schema.go
-	return rows.Scan(&aciinfo.BlobKey, &aciinfo.Name, &aciinfo.ImportTime, &aciinfo.LastUsed, &aciinfo.Latest, &aciinfo.Size, &aciinfo.TreeStoreSize)
+	return rows.Scan(&aciinfo.BlobKey, &aciinfo.Name, &aciinfo.ImportTime, &aciinfo.LastUsed, &aciinfo.Latest,
+		&aciinfo.Size, &aciinfo.TreeStoreSize, &aciinfo.VerificationHash, &aciinfo.SourceURL, &aciinfo.InsecureOptions)
 }
 
 // GetAciInfosWithKeyPrefix returns all the ACIInfos with a blobkey starting with the given prefix.
 func GetACIInfosWithKeyPrefix(tx *sql.Tx, prefix string) ([]*ACIInfo, error) {
 	var aciinfos []*ACIInfo
-	rows, err := tx.Query("SELECT * from aciinfo WHERE hasPrefix(blobkey, $1)", prefix)
+	rows, err := tx.Query("SELECT * FROM aciinfo WHERE hasPrefix(blobkey, $1)", prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +103,7 @@ func GetACIInfosWithKeyPrefix(tx *sql.Tx, prefix string) ([]*ACIInfo, error) {
 func GetACIInfosWithName(tx *sql.Tx, name string) ([]*ACIInfo, bool, error) {
 	var aciinfos []*ACIInfo
 	found := false
-	rows, err := tx.Query("SELECT * from aciinfo WHERE name == $1", name)
+	rows, err := tx.Query("SELECT * FROM aciinfo WHERE name == $1", name)
 	if err != nil {
 		return nil, false, err
 	}
@@ -157,11 +178,14 @@ func GetAllACIInfos(tx *sql.Tx, sortfields []string, ascending bool) ([]*ACIInfo
 func WriteACIInfo(tx *sql.Tx, aciinfo *ACIInfo) error {
 	// ql doesn't have an INSERT OR UPDATE function so
 	// it's faster to remove and reinsert the row
-	_, err := tx.Exec("DELETE from aciinfo where blobkey == $1", aciinfo.BlobKey)
+	_, err := tx.Exec("DELETE FROM aciinfo WHERE blobkey == $1", aciinfo.BlobKey)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("INSERT into aciinfo (blobkey, name, importtime, lastused, latest, size, treestoresize) VALUES ($1, $2, $3, $4, $5, $6, $7)", aciinfo.BlobKey, aciinfo.Name, aciinfo.ImportTime, aciinfo.LastUsed, aciinfo.Latest, aciinfo.Size, aciinfo.TreeStoreSize)
+
+	_, err = tx.Exec("INSERT INTO aciinfo (blobkey, name, importtime, lastused, latest, size, treestoresize, verificationhash, sourceurl, insecureoptions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+		aciinfo.BlobKey, aciinfo.Name, aciinfo.ImportTime, aciinfo.LastUsed, aciinfo.Latest,
+		aciinfo.Size, aciinfo.TreeStoreSize, aciinfo.VerificationHash, aciinfo.SourceURL, aciinfo.InsecureOptions)
 	if err != nil {
 		return err
 	}
@@ -171,7 +195,7 @@ func WriteACIInfo(tx *sql.Tx, aciinfo *ACIInfo) error {
 
 // RemoveACIInfo removes the ACIInfo with the given blobKey.
 func RemoveACIInfo(tx *sql.Tx, blobKey string) error {
-	_, err := tx.Exec("DELETE from aciinfo where blobkey == $1", blobKey)
+	_, err := tx.Exec("DELETE FROM aciinfo WHERE blobkey == $1", blobKey)
 	if err != nil {
 		return err
 	}

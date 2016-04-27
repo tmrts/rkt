@@ -14,6 +14,8 @@
 
 package flag
 
+import "strings"
+
 const (
 	insecureNone  = 0
 	insecureImage = 1 << (iota - 1)
@@ -81,4 +83,16 @@ func (sf *SecFlags) SkipAllSecurityChecks() bool {
 
 func (sf *SecFlags) SkipAnySecurityChecks() bool {
 	return sf.flags != 0
+}
+
+func (sf *SecFlags) String() string {
+	opts := []string{}
+
+	for optstr, opt := range insecureOptionsMap {
+		if sf.hasFlag(opt) {
+			opts = append(opts, optstr)
+		}
+	}
+
+	return strings.Join(opts, ",")
 }

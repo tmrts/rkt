@@ -447,9 +447,7 @@ func (s *Store) ReadStream(key string) (io.ReadCloser, error) {
 // WriteACI takes an ACI encapsulated in an io.Reader, decompresses it if
 // necessary, and then stores it in the store under a key based on the image ID
 // (i.e. the hash of the uncompressed ACI)
-// latest defines if the aci has to be marked as the latest. For example an ACI
-// discovered without asking for a specific version (latest pattern).
-func (s *Store) WriteACI(r io.ReadSeeker, latest bool) (string, error) {
+func (s *Store) WriteACI(r io.ReadSeeker, fetchInfo ACIFetchInfo) (string, error) {
 	// We need to allow the store's setgid bits (if any) to propagate, so
 	// disable umask
 	um := syscall.Umask(0)
@@ -503,17 +501,22 @@ func (s *Store) WriteACI(r io.ReadSeeker, latest bool) (string, error) {
 	}
 
 	// Save aciinfo
-	if err = s.db.Do(func(tx *sql.Tx) error {
+	err = s.db.Do(func(tx *sql.Tx) error {
 		aciinfo := &ACIInfo{
-			BlobKey:    key,
-			Name:       im.Name.String(),
-			ImportTime: time.Now(),
-			LastUsed:   time.Now(),
-			Latest:     latest,
-			Size:       sz,
+			BlobKey:          key,
+			Name:             im.Name.String(),
+			ImportTime:       time.Now(),
+			LastUsed:         time.Now(),
+			Size:             sz,
+			Latest:           fetchInfo.Latest,
+			VerificationHash: fetchInfo.VerificationHash,
+			SourceURL:        fetchInfo.SourceURL,
+			InsecureOptions:  fetchInfo.InsecureOptions,
 		}
+
 		return WriteACIInfo(tx, aciinfo)
-	}); err != nil {
+	})
+	if err != nil {
 		return "", errwrap.Wrap(errors.New("error writing ACI Info"), err)
 	}
 

@@ -33,6 +33,7 @@ var (
 		3: migrateToV3,
 		4: migrateToV4,
 		5: migrateToV5,
+		6: migrateToV6,
 	}
 )
 
@@ -90,12 +91,12 @@ func migrateToV2(tx *sql.Tx) error {
 func migrateToV3(tx *sql.Tx) error {
 	for _, t := range []string{
 		"CREATE TABLE aciinfo_tmp (blobkey string, name string, importtime time, latest bool);",
-		"INSERT INTO aciinfo_tmp (blobkey, name, importtime, latest) SELECT blobkey, appname, importtime, latest from aciinfo",
+		"INSERT INTO aciinfo_tmp (blobkey, name, importtime, latest) SELECT blobkey, appname, importtime, latest FROM aciinfo",
 		"DROP TABLE aciinfo",
 		"CREATE TABLE aciinfo (blobkey string, name string, importtime time, latest bool);",
 		"CREATE UNIQUE INDEX IF NOT EXISTS blobkeyidx ON aciinfo (blobkey)",
 		"CREATE INDEX IF NOT EXISTS nameidx ON aciinfo (name)",
-		"INSERT INTO aciinfo SELECT * from aciinfo_tmp",
+		"INSERT INTO aciinfo SELECT * FROM aciinfo_tmp",
 		"DROP TABLE aciinfo_tmp",
 	} {
 		_, err := tx.Exec(t)
@@ -109,7 +110,7 @@ func migrateToV3(tx *sql.Tx) error {
 func migrateToV4(tx *sql.Tx) error {
 	for _, t := range []string{
 		"CREATE TABLE aciinfo_tmp (blobkey string, name string, importtime time, lastusedtime time, latest bool);",
-		"INSERT INTO aciinfo_tmp (blobkey, name, importtime, latest) SELECT blobkey, name, importtime, latest from aciinfo",
+		"INSERT INTO aciinfo_tmp (blobkey, name, importtime, latest) SELECT blobkey, name, importtime, latest FROM aciinfo",
 		"DROP TABLE aciinfo",
 		// We don't use now() as a DEFAULT for lastusedtime because it doesn't
 		// return a UTC time, which is what we want. Instead, we UPDATE it
@@ -117,7 +118,7 @@ func migrateToV4(tx *sql.Tx) error {
 		"CREATE TABLE aciinfo (blobkey string, name string, importtime time, lastusedtime time, latest bool);",
 		"CREATE UNIQUE INDEX IF NOT EXISTS blobkeyidx ON aciinfo (blobkey)",
 		"CREATE INDEX IF NOT EXISTS nameidx ON aciinfo (name)",
-		"INSERT INTO aciinfo SELECT * from aciinfo_tmp",
+		"INSERT INTO aciinfo SELECT * FROM aciinfo_tmp",
 		"DROP TABLE aciinfo_tmp",
 	} {
 		_, err := tx.Exec(t)
@@ -136,12 +137,32 @@ func migrateToV4(tx *sql.Tx) error {
 func migrateToV5(tx *sql.Tx) error {
 	for _, t := range []string{
 		"CREATE TABLE aciinfo_tmp (blobkey string, name string, importtime time, lastused time, latest bool, size int64, treestoresize int64);",
-		"INSERT INTO aciinfo_tmp (blobkey, name, importtime, lastused, latest) SELECT blobkey, name, importtime, lastusedtime, latest from aciinfo",
+		"INSERT INTO aciinfo_tmp (blobkey, name, importtime, lastused, latest) SELECT blobkey, name, importtime, lastusedtime, latest FROM aciinfo",
 		"DROP TABLE aciinfo",
-		"CREATE TABLE aciinfo (blobkey string, name string, importtime time, lastused time, latest bool, size int64 DEFAULT 0, treestoresize int64 DEFAULT 0);",
+		"CREATE TABLE aciinfo (blobkey string, name string, importtime time, lastused time, latest bool, size int64, treestoresize int64);",
 		"CREATE UNIQUE INDEX IF NOT EXISTS blobkeyidx ON aciinfo (blobkey)",
 		"CREATE INDEX IF NOT EXISTS nameidx ON aciinfo (name)",
-		"INSERT INTO aciinfo SELECT * from aciinfo_tmp",
+		"INSERT INTO aciinfo SELECT * FROM aciinfo_tmp",
+		"DROP TABLE aciinfo_tmp",
+	} {
+		_, err := tx.Exec(t)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func migrateToV6(tx *sql.Tx) error {
+	for _, t := range []string{
+		"CREATE TABLE aciinfo_tmp (blobkey string, name string, importtime time, lastused time, latest bool, size int64, treestoresize int64, verificationhash string, sourceurl string, insecureoptions string);",
+		"INSERT INTO aciinfo_tmp (blobkey, name, importtime, latest, lastused, size, treestoresize) SELECT blobkey, name, importtime, latest, lastused, size, treestoresize FROM aciinfo",
+		"DROP TABLE aciinfo",
+		"CREATE TABLE aciinfo (blobkey string, name string, importtime time, lastused time, latest bool, size int64, treestoresize int64, verificationhash string, sourceurl string, insecureoptions string);",
+		"CREATE UNIQUE INDEX IF NOT EXISTS blobkeyidx ON aciinfo (blobkey)",
+		"CREATE INDEX IF NOT EXISTS nameidx ON aciinfo (name)",
+		"INSERT INTO aciinfo SELECT * FROM aciinfo_tmp",
 		"DROP TABLE aciinfo_tmp",
 	} {
 		_, err := tx.Exec(t)
