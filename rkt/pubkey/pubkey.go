@@ -173,7 +173,7 @@ func (m *Manager) metaDiscoverPubKeyLocations(prefix string) ([]string, error) {
 		}
 	}
 
-	return ep.Keys, nil
+	return ep.PublicKeys, nil
 }
 
 // getPubKey retrieves a public key (if remote), and verifies it's a gpg key
