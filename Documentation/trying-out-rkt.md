@@ -43,10 +43,10 @@ First, download the `Vagrantfile` and start a Linux machine with rkt installed b
 ```
 git clone https://github.com/coreos/rkt
 cd rkt
-vagrant up
+vagrant up rkt
 ```
 
-### Vagrant on Linux
+### Vagrant on Linux with libvirt
 
 To use Vagrant on a Linux machine, you may want to use libvirt as a VMM instead of VirtualBox. To do so, install the necessary plugins, convert the box, and start the machine using the `libvirt` provider:
 
@@ -59,10 +59,10 @@ vagrant up --provider=libvirt
 
 ### Accessing the Vagrant VM and running rkt
 
-With a subsequent `vagrant ssh` you will have access to run rkt:
+With a subsequent `vagrant ssh rkt` you will have access to run rkt:
 
 ```
-vagrant ssh
+vagrant ssh rkt
 rkt --help
 ```
 
